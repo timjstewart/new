@@ -1,0 +1,202 @@
+#!/bin/bash
+
+#======================================================================
+# new -- creates one or more new files and/or directories based on a
+#        collection of templates (e.g. C++ class files, C++ project)
+#----------------------------------------------------------------------
+# Templates are stored in sub-directories of ~/.new as one or more m4
+# templates.  A template can have a shell script named "install" that,
+# if present, is executed after all files have been generated.
+#
+# The directory structure of the m4 files is preserved when files are
+# generated except that all instances of the word name are replaced
+# with what the user typed in for the NAME argument.
+#
+# m4 receives the following parameters when generating a file:
+# 
+#   name - what the user typed in for the NAME argument
+#  
+#   directory - the basename of the directory that the new thing is
+#               being created in.
+#
+# A template directory can contain a file named "questions" that
+# contains multiple lines of the following format:
+#
+#   variable:question:default
+#
+# variable - is the name of a variable found in one or more of the m4
+# templates
+#
+# question - is a question to ask the user in order to obtain a value
+# for the variable
+#
+# default - is the default value of the variable if the user does not
+# supply a value
+#
+# Example questions file:
+# 
+#   name_space:Enter a namespace:none
+#   version:Enter vesion:1.0
+#
+# It's important that the questions file end with a new line so that
+# all questions get asked of the user.
+#======================================================================
+
+# The application directory where templates are stored.
+eval app_dir="~/.new"
+
+# A string containing variables specified by the user that will be
+# sent to the m4 template engine.  These variables were defined in the
+# optional questions file.
+user_variables_string=""
+
+# Display the command's usage and available templates
+function usage
+{
+    echo "usage: new TYPE WHERE"
+    echo "  NAME - the name of the new thing"
+    echo "  TYPE - the type of thing to create.  It should be one of the following:"
+    cd $app_dir
+    ls * -d
+}
+
+# Generate all files in the collection of templates
+function generate_files 
+{
+    echo "generating files:"
+
+    # Make sure that hidden files are processed too.
+    shopt -s dotglob
+
+    # Make sure that **/*.m4 finds all files in $template_dir and all
+    # sub-directories of $template_dir.
+    shopt -s globstar
+
+    # Look through files in template directory
+    for file in $template_dir/**/*.m4 
+    do
+	if [ -f "$file" ]
+	then
+  	    generate_file $file
+	fi
+    done
+
+    # restore shell options
+    shopt -u dotglob
+    shopt -u globstar
+}
+
+# Generate a single file based on an m4 template
+function generate_file 
+{
+    local file=$1
+
+    local output_file=${file#"$template_dir/"}
+    output_file=${output_file%.m4}
+    output_file=${output_file//name/"$name"}
+
+    local directory=`dirname $output_file`
+    
+    # Don't create a file if a directory by the same name exists.
+    if [ -f "$directory" ]
+    then
+	echo "   [error] file named $directory already exists"
+	return
+    fi
+
+    # Create directory structure if it doesn't already exist.
+    if [ ! -d "$directory" ]
+    then
+	mkdir -p "$directory"
+    fi
+
+    if [ -f "$output_file" ]
+    then
+	echo "   [skipping] $output_file"
+    else
+        # Generate file if it does not exist.
+	if m4 -Dname=$name -Ddirectory=$(basename $(pwd)) $user_variables_string $file > $output_file
+	then
+	    echo "   [creating] $output_file"
+	else
+	    echo "   [error] $output_file - m4 template engine failed."
+	fi
+    fi
+}
+
+# If an install script exists, run it.
+function run_install_script 
+{
+    local install_script=$template_dir/install
+
+    if [ -x $install_script ]
+    then
+	if . $template_dir/install $name
+	then
+	    true
+	else
+	    echo "new: install script failed."
+	fi
+    fi
+}
+
+# If a questions file exists, ask all questions in the file and
+# remember the user's answers so that they can be sent to the m4
+# template engine.
+function get_user_variables
+{
+    local OLD_IFS=$IFS
+    local questions_file=$template_dir/questions
+
+    IFS=":"
+
+    if [ -r "$questions_file" ]
+    then
+	echo "Please answer the following question(s)..."
+
+	while read variable question default
+	do
+	    # prompt the user for the value of $variable showing them
+	    # the default they well get if they just hit ENTER.
+	    read -p "  $question${default:+ [$default]}: " -u 1 answer
+
+	    # append the new variable onto the user variables string
+	    user_variables_string="$user_variables_string -D$variable=${answer:-$default}"
+	done < $questions_file
+    fi 
+
+    IFS=$OLD_IFS
+}
+
+# The main entry point of the script
+function main 
+{
+    if [ "$#" != "2" ]
+    then
+	usage
+	exit 1
+    fi
+
+    # Global variable for the directory of the template the user
+    # selected
+    template_dir="$app_dir/$1"
+
+    # Global variable for the name of the thing the user is trying to
+    # create
+    name="$2"
+
+    if [ ! -e $template_dir ]
+    then
+	echo "new: could not find template: $template_dir."
+	exit 1
+    fi
+
+    get_user_variables
+
+    generate_files
+
+    run_install_script
+}
+
+main $@
+
