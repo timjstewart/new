@@ -1,0 +1,10 @@
+#! /bin/bash
+cd $1
+if [ ! -d ".git" ]
+then
+  git init  > /dev/null
+  git add . > /dev/null
+  git commit -m "initial revision of $1" > /dev/null
+  emacsclient -n *.cpp Makefile
+fi  
+

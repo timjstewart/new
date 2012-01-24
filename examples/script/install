@@ -1,0 +1,2 @@
+chmod 777 $1.sh  
+emacsclient -n "$1.sh"
