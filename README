@@ -1,0 +1,40 @@
+new -- creates one or more new files and/or directories based on a
+       collection of templates (e.g. C++ class files, C++ project)
+
+Templates are stored in sub-directories of ~/.new as one or more m4
+templates.  A template can have a shell script named "install" that,
+if present, is executed after all files have been generated.
+
+The directory structure of the m4 files is preserved when files are
+generated except that all instances of the word name are replaced
+with what the user typed in for the NAME argument.
+
+m4 receives the following parameters when generating a file:
+
+  name - what the user typed in for the NAME argument
+ 
+  directory - the basename of the directory that the new thing is
+              being created in.
+
+A template directory can contain a file named "questions" that
+contains multiple lines of the following format:
+
+  variable:question:default
+
+variable - is the name of a variable found in one or more of the m4
+templates
+
+question - is a question to ask the user in order to obtain a value
+for the variable
+
+default - is the default value of the variable if the user does not
+supply a value
+
+Example questions file:
+
+  name_space:Enter a namespace:none
+  version:Enter vesion:1.0
+
+It's important that the questions file end with a new line so that
+all questions get asked of the user.
+
